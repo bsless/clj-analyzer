@@ -63,20 +63,23 @@
           :methods
           [{:fixed-arity ?n
             :variadic? false
-            :form _ :arglist _ :tag _ :o-tag _ ;; rudely ignore
             :params
-            [{:local _ :arg-id _
-              & !params} ...]
-            :body ?body}
-           ..1]} ;; there can be only one!
-     & ?rest}
+            [{:op :binding
+              :local :arg
+              :name !name
+              :atom !atom} ...]
+            :body ?body
+            }
+           ..1]}} ;; there can be only one!
     {:op :let
      :children [:bindings :body]
      :bindings
-     [{:init !args
+     [{:op :binding
        :local :let
-       :children [:init]
-       & !params} ...]
+       :name !name
+       :atom !atom
+       :init !args
+       :children [:init]} ...]
      :body ?body})
 
 
