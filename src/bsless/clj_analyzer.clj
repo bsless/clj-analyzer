@@ -108,6 +108,10 @@
    nil
    coll))
 
+(comment
+  (ana/analyze
+   '(defn foo [x & y] (apply + x y))))
+
 (defn- -find-matching-method
   [^long argc methods]
   (or
