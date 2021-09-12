@@ -70,8 +70,7 @@
               :local :arg
               :name !name
               :atom !atom} ...]
-            :body ?body
-            }
+            :body ?body}
            ..1]}} ;; there can be only one!
     {:op :let
      :children [:bindings :body]
@@ -82,21 +81,7 @@
        :atom !atom
        :init !args
        :children [:init]} ...]
-     :body ?body})
-
-
-  (r/bottom-up
-   (r/rewrite
-    {:op :invoke
-     :fn {:op :fn
-          :methods [{:fixed-arity ?n
-                     :params ?params
-                     & ?method-rest}
-                    ...]}
-     :args [!args ..?n]}
-    {:children [:bindings :body]
-     :op :let
-     :bindings (into [] (interleave ?params !args))})))
+     :body ?body}))
 
 (comment
   (ana/analyze
