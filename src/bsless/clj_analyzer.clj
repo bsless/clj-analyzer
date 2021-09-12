@@ -55,6 +55,8 @@
       (fn [node] (= :invoke (:op node)))
       (ast/nodes ast))))
 
+  ;;; Beta reduce non-variadic
+
   (m/rewrite
     node
     {:op :invoke
