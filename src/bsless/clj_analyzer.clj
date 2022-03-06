@@ -8,6 +8,7 @@
    [clojure.tools.analyzer.passes.emit-form :as e]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [bsless.clj-analyzer.util :refer [find-first]]
    ))
 
 (defn- download-ast-ref!
@@ -27,6 +28,11 @@
 (comment
   (def the-core (clojure.tools.analyzer.jvm/analyze-ns 'clojure.core)))
 
+(def default-passes-opts
+  (assoc
+   ana/default-passes-opts
+   :uniquify/uniquify-env true))
+
 (comment
   (ast/ast->eav
    (ana/analyze
@@ -39,12 +45,54 @@
        [m a b]
        ((fn [m ks] (reduce get m ks)) m [a b])))))
 
+(defn analyze
+  [form]
+  (ana/analyze form (ana/empty-env) {:passes-opts default-passes-opts}))
+
 (comment
   (def ast
     (ana/analyze
      '(defn foo
         [m a b]
-        ((fn [m ks] (reduce get m ks)) m [a b])))))
+        ((fn [m ks] (reduce get m ks)) m [a b]))
+     (ana/empty-env)
+     {:passes-opts default-passes-opts})))
+
+(defn matching-args*
+  [n methods]
+  (find-first (fn [{:keys [fixed-arity]}] (= n fixed-arity)) methods))
+
+(defn find-matching-method
+  [{args :args
+    {methods :methods} :fn :as _node}]
+  (matching-args* (count args) methods))
+
+(defn ->let-binding
+  [name param]
+  {:op :binding
+   :local :let
+   :name name
+   :init param
+   :children [:init]})
+
+(defn beta-reduce
+  [{args :args :as node}]
+  (when-let [{:keys [params body]} (find-matching-method node)]
+    {:op :let
+     :children [:bindings :body]
+     :bindings (mapv ->let-binding (mapv :name params) args)
+     :body body}))
+
+(defn simplify*
+  [{:keys [bindings body] :as node}]
+  (let [b (first bindings)]
+    (assoc node :body
+           (ast/postwalk
+            body
+            (fn [{:keys [op name] :as node}]
+              (if (and (= :local op) (= name (:name b)))
+                (:init b)
+                node))))))
 
 
 (comment
@@ -220,6 +268,96 @@
       m1
       m2))))
 
+#_(def *-occurs nil)
+(defmulti *-occurs vector)
+(defmethod *-occurs [:once-safe :once-safe] [_ _] :multi-safe)
+(defmethod *-occurs [:multi-safe :once-safe] [_ _] :multi-safe)
+(defmethod *-occurs [:once-safe :multi-safe] [_ _] :multi-safe)
+(defmethod *-occurs [:multi-safe :multi-safe] [_ _] :multi-safe)
+
+(defmulti occurs :op)
+
+(def inc* (fnil inc 0))
+
+(defmethod occurs :local
+  [{{locals :locals #_#_:as env} :env
+    #_#_-name :name
+    form :form
+    :as node}]
+  (assoc-in
+   node
+   [:env :locals form]
+   (let [{#_#_local-name :name :as local} (get locals form)]
+     (-> local
+         (update :occurs-count inc*)
+         (assoc :occurs :occurs/once-safe)))))
+
+(comment
+  (def local
+    {:children [],
+     :name 'm__#0,
+     :op :local,
+     :env
+     {:loop-locals 3,
+      :locals
+      '{m {:form m,
+           :name m__#0,
+           :variadic? false,
+           :op :binding,
+           :arg-id 0,
+           :local :arg},
+        a {:form a,
+           :name a__#0,
+           :variadic? false,
+           :op :binding,
+           :arg-id 1,
+           :local :arg},
+        b {:form b,
+           :name b__#0,
+           :variadic? false,
+           :op :binding,
+           :arg-id 2,
+           :local :arg}},
+      :ns 'bsless.clj-analyzer,
+      :loop-id 'loop_21101,
+      :once false,
+      :context :ctx/expr},
+     :o-tag java.lang.Object,
+     :variadic? false,
+     :arg-id 0,
+     :form 'm,
+     :tag java.lang.Object,
+     :local :arg,
+     :assignable? false})
+  (occurs local))
+
+(defmethod occurs :if
+  [{-test :test
+    {{then-locals :locals} :env :as -then} :then
+    {{else-locals :locals} :env :as -else} :else
+    {locals :locals :as env} :env
+    :as node}]
+  (reduce-kv
+   (fn [m k v]
+     (let [{then-count :occurs-count
+            then-occurs :occurs
+            :as then-local} (get then-locals k)
+           {else-count :occurs-count
+            else-occurs :occurs
+            :as else-local} (get else-locals k)]
+       (condp = [then-occurs else-occurs]
+         [:occurs/once-safe :occurs/once-safe] :occurs/multi-safe
+         [:occurs/multi-safe :occurs/once-safe] :occurs/multi-safe
+         [:occurs/multi-safe :occurs/multi-safe] :occurs/multi-safe
+         [:occurs/multi-safe :occurs/multi-safe] :occurs/multi-safe
+         )
+       ))
+   locals
+   locals))
+
+(comment
+  (def ifte (analyze '(let [x 1 y false] (if y (inc x) x)))))
+
 (defn -occurs
   "Counts occurrences of local names."
   [{:keys [op name children] :as ast}]
@@ -234,10 +372,6 @@
       {}
       (ast/children ast)))))
 
-(def default-passes-opts
-  (assoc
-   ana/default-passes-opts
-   :uniquify/uniquify-env true))
 
 (comment
   (ast/postwalk
