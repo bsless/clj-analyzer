@@ -66,13 +66,15 @@
   (assoc ast ::occurs (occurs+ (::occurs test)
                                (occurs* (::occurs then) (::occurs else)))))
 
-#_
 (defmethod classify-occurs* :case
-  [{:keys [test #_tests thens default]}]
-  (let [occurs (mapv ::occurs thens)
-        _ (some #{::unsafe} occurs)]
-    )
-  )
+  [{:keys [test thens default] :as ast}]
+  (assoc
+   ast
+   ::occurs
+   (occurs+ (::occurs test)
+            (->> thens
+                 (map ::occurs)
+                 (reduce occurs* (::occurs default {}))))))
 
 #_
 (defmethod classify-occurs* :fn
