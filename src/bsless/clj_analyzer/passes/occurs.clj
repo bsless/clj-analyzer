@@ -1,12 +1,7 @@
 (ns bsless.clj-analyzer.passes.occurs
   (:require
    [clojure.tools.analyzer.jvm :as ana]
-   [clojure.tools.analyzer.ast :as ast]
-   #_[clojure.tools.analyzer.ast.query :as q]
-   #_[clojure.tools.analyzer.passes.emit-form :as e]
-   #_[clojure.tools.analyzer.passes.jvm.emit-form :as jvm.e]
-   #_[clojure.edn :as edn]
-   #_[clojure.java.io :as io]))
+   [clojure.tools.analyzer.ast :as ast]))
 
 (comment
   (ana/analyze
