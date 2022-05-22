@@ -38,7 +38,7 @@
          (+ a (+ a b)))
       (ana/empty-env)
       {:passes-opts default-passes-opts})
-     occurs/classify-occurs*))
+     occurs/classify))
   (jvm.e/emit-hygienic-form (inline ast (first (:bindings ast)))))
 
 (defn constant?

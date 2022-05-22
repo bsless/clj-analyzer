@@ -92,3 +92,8 @@
          m))
      {}
      occurs)))
+
+
+(defn classify
+  [ast]
+  (classify-occurs* ast))
