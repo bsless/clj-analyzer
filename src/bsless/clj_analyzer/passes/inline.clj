@@ -50,11 +50,13 @@
   (= :fn (:op node)))
 
 (defn constructor-application?
-  [{:keys [op]}]
-  (or (= :map op)
-      (= :vector op)
-      (= :set op)
-      (= :new op)))
+  [{:keys [op] :as ast}]
+  (and
+   (or (= :map op)
+       (= :vector op)
+       (= :set op)
+       (= :new op))
+   (every? constant? (ast/children ast))))
 
 (defn whnf?
   "Check if AST node is in Weak Head Normal Form.
