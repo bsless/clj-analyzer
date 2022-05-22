@@ -4,6 +4,7 @@
    [clojure.tools.analyzer.ast :as ast]
    [clojure.tools.analyzer.ast.query :as q]
    [clojure.tools.analyzer.passes.emit-form :as e]
+   [clojure.tools.analyzer.passes.jvm.emit-form :as jvm.e]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
    [bsless.clj-analyzer.util :refer [find-first]]
@@ -294,13 +295,129 @@
   (ast/postwalk
    (ana/analyze
     '(let [a 1
-           b (+ a 2)]
+           b (+ a 2)
+           a (+ a b)]
        (+ a (+ a b)))
     (ana/empty-env)
     {:passes-opts default-passes-opts})
-   (comp -update-env-with-names -occurs)))
+   -update-env-with-names
+   #_(comp -update-env-with-names -occurs)))
 
-(defmulti classify-occurs* :op)
+(defn safe?
+  [x]
+  (or (identical? ::once-safe x)
+      (identical? ::multi-safe x)))
+
+(defn unsafe?
+  [x]
+  (or (identical? ::once-unsafe x)
+      (identical? ::multi-unsafe x)))
+
+;;; Occurrence combinators
+
+(defn -occurs*
+  "In branching contexts, occurrence on multiple branches can be safe."
+  [x y]
+  (cond
+    (and (unsafe? x) (unsafe? y)) ::multi-unsafe
+    (unsafe? x) x
+    (unsafe? y) y
+    :else ::multi-safe))
+
+(defn -occurs+
+  "In non branching context, every co-occurrence of variable safety is
+  multi unsafe."
+  [_ _] ::multi-unsafe)
+
+(defn occurs+ [m1 m2] (merge-with -occurs+ m1 m2))
+(defn occurs* [m1 m2] (merge-with -occurs* m1 m2))
+
+;;;
+
+(defmulti classify-occurs*
+  "Add a map of {name occurrence} for each node in a AST."
+  :op)
+
+(defmethod classify-occurs* :local
+  [{:keys [name] :as ast}]
+  (assoc ast ::occurs {name ::once-safe}))
+
+(defmethod classify-occurs* :default
+  [ast]
+  (assoc ast ::occurs (reduce occurs+ {} (map ::occurs (ast/children ast)))))
+
+(defn do-inline
+  [ast {:keys [name init]}]
+  (ast/postwalk
+   ast
+   (fn [{:keys [op] :as ast}]
+     (if (and (= op :local) (= name (:name ast)))
+       init
+       ast))))
+
+(defn inline
+  "Assume AST here is a let-form"
+  [{:keys [bindings body] :as ast} binding]
+  (let [bindings (remove #(identical? binding %) bindings)]
+    (assoc
+     ast
+     :bindings (mapv #(do-inline % binding) bindings)
+     :body (do-inline body binding))))
+
+(comment
+  (def ast
+    (ast/postwalk
+     (ana/analyze
+      '(let [a 1
+             b (+ a 2)
+             a (+ a b)]
+         (+ a (+ a b)))
+      (ana/empty-env)
+      {:passes-opts default-passes-opts})
+     classify-occurs*))
+  (jvm.e/emit-hygienic-form (inline ast (first (:bindings ast)))))
+
+(defn constant?
+  [node]
+  (= :const (:op node)))
+
+(defn lambda-abstraction?
+  [node]
+  (= :fn (:op node)))
+
+(defn constructor-application?
+  [{:keys [op]}]
+  (or (= :map op)
+      (= :vector op)
+      (= :set op)
+      (= :new op)))
+
+(defn whnf?
+  "Check if AST node is in Weak Head Normal Form.
+  https://wiki.haskell.org/Weak_head_normal_form"
+  [node]
+  (or (constant? node)
+      (lambda-abstraction? node)
+      (constructor-application? node)))
+
+(defn inline?
+  "Check if a let-binding node can be inlined.
+  A binding can be inlined if it is in WHNF or safe to inline."
+  [ast {:keys [name init]}]
+  (or (whnf? init)
+      (safe? (get (::occurs ast) name))))
+
+(defmethod classify-occurs* :if
+  [{:keys [test then else]}]
+  (occurs+ (::occurs test)
+           (occurs* (::occurs then) (::occurs else))))
+
+(defmethod classify-occurs* :case
+  [{:keys [test #_tests thens default]}]
+  (let [occurs (mapv ::occurs thens)
+        _ (some #{::unsafe} occurs)]
+    )
+  )
 
 (defmethod classify-occurs* :fn
   [{:keys [op name children env] :as ast}]
@@ -368,23 +485,4 @@
 (comment
   (q/unfold-expression-clauses
    '{:where [[(inc (dec ?foo)) ?bar] ] }))
-
-(defmacro definline+
-  "Like [[definline]] but takes multiple arities form.
-  Cannot be used with `&` but supports multiple arities."
-  {:added "1.0"}
-  [name & decls]
-  (let [[pre-args decls] (split-with (comp not list?) decls)
-        argvs (map first decls)
-        body' (eval (list* `fn (symbol (str "apply-inline-" name)) decls))
-        decls' (map (fn build-decls [argv] (list argv (apply body' argv))) argvs)]
-    `(do
-       (defn ~name ~@pre-args ~@decls')
-       (alter-meta! (var ~name) assoc :inline (fn ~name ~@decls) :inline-arities ~(into #{} (map count) argvs))
-       (var ~name))))
-
-(comment
-  (definline+ foo
-    ([a b] `(+ ~a ~b))
-    ([a b c] `(+ ~a ~b ~c))))
 
