@@ -62,9 +62,9 @@
   (assoc ast ::occurs (reduce occurs+ {} (map ::occurs (ast/children ast)))))
 
 (defmethod classify-occurs* :if
-  [{:keys [test then else]}]
-  (occurs+ (::occurs test)
-           (occurs* (::occurs then) (::occurs else))))
+  [{:keys [test then else] :as ast}]
+  (assoc ast ::occurs (occurs+ (::occurs test)
+                               (occurs* (::occurs then) (::occurs else)))))
 
 #_
 (defmethod classify-occurs* :case
