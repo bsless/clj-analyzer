@@ -1,0 +1,13 @@
+#+TITLE: clj-analyzer
+
+Experiments with writing optimization passes on top of tools.analyzer
+
+Experimental, unfinished and untested. But kinda cool.
+
+* Optimization by program transformation
+
+Most work found here is based on [[https:gitlab.haskell.org/ghc/ghc/-/wikis/commentary/compiler/core-to-core-pipeline][Haskell Core to Core pipeline]].
+
+** Simplification
+
+Essentially beta reduction. Implemented in ~passes.{beta-reduce,occurs,inline}~
