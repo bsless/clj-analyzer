@@ -58,6 +58,10 @@
        (= :new op))
    (every? constant? (ast/children ast))))
 
+(defn bottom?
+  [ast]
+  (= :throw (:op ast)))
+
 (defn whnf?
   "Check if AST node is in Weak Head Normal Form.
   https://wiki.haskell.org/Weak_head_normal_form"
@@ -71,4 +75,5 @@
   A binding can be inlined if it is in WHNF or safe to inline."
   [ast {:keys [name init]}]
   (or (whnf? init)
+      (bottom? init)
       (occurs/occurs-safely? (get ast name))))
