@@ -6,7 +6,7 @@ Experimental, unfinished and untested. But kinda cool.
 
 * Optimization by program transformation
 
-Most work found here is based on [[https:gitlab.haskell.org/ghc/ghc/-/wikis/commentary/compiler/core-to-core-pipeline][Haskell Core to Core pipeline]].
+Most work found here is based on [[https://gitlab.haskell.org/ghc/ghc/-/wikis/commentary/compiler/core-to-core-pipeline][Haskell Core to Core pipeline]].
 
 ** Simplification
 
